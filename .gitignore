@@ -70,3 +70,6 @@ claude-output
 /integrations/openclaw/dist/
 /integrations/openclaw/skills/
 /integrations/openclaw/*.tgz
+/integrations/dsh/node_modules/
+/integrations/dsh/dist/
+/integrations/dsh/*.tgz

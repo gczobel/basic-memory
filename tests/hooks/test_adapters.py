@@ -86,6 +86,46 @@ def test_codex_missing_fields_normalize_to_defaults() -> None:
     assert event.model is None
 
 
+# --- DSH ---
+
+
+def test_dsh_session_start_fixture_normalizes() -> None:
+    payload = load_fixture("dsh_session_start.json")
+
+    event = for_harness("dsh").normalize(SESSION_STARTED, payload)
+
+    assert event.source == "dsh"
+    assert event.event == SESSION_STARTED
+    assert event.session_id == "session-46f799d7-1bf4-4fac-a52e-0f2d5d14f2df"
+    assert event.cwd == "/home/dev/projects/demo"
+    assert event.trigger == "startup"
+    assert event.model == "deepseek-v4-flash"
+    assert event.turn_id is None
+    # DSH persists an event-sourced session log, not a Claude-shaped transcript.
+    assert event.transcript_path == ""
+
+
+def test_dsh_pre_compact_fixture_normalizes() -> None:
+    payload = load_fixture("dsh_pre_compact.json")
+
+    event = for_harness("dsh").normalize(COMPACTION_IMMINENT, payload)
+
+    assert event.event == COMPACTION_IMMINENT
+    assert event.trigger == "pressure"
+    assert event.session_id == "session-46f799d7-1bf4-4fac-a52e-0f2d5d14f2df"
+    assert event.transcript_path == ""
+
+
+def test_dsh_missing_fields_normalize_to_defaults() -> None:
+    event = for_harness("dsh").normalize(SESSION_STARTED, {})
+
+    assert event.session_id == ""
+    assert event.cwd == ""
+    assert event.transcript_path == ""
+    assert event.trigger is None
+    assert event.model is None
+
+
 # --- Registry ---
 
 

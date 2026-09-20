@@ -1,0 +1,157 @@
+"""DSH installer coverage: the row mount and the `bm install dsh` plan."""
+
+import os
+from pathlib import Path
+
+import pytest
+import yaml
+from typer.testing import CliRunner
+
+from basic_memory.cli.commands.install import (
+    DSH_PACKAGE,
+    DSH_ROW_MARKER,
+    dsh_profile_patch,
+    dsh_row_block,
+    mount_dsh_row,
+)
+from basic_memory.cli.main import app
+
+runner = CliRunner()
+
+
+@pytest.fixture(autouse=True)
+def isolated_dsh_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Keep the installer out of the developer's real ~/.dsh."""
+    home = tmp_path / "dsh-home"
+    home.mkdir()
+    monkeypatch.setenv("DSH_HOME", str(home))
+    return home
+
+
+def fake_dsh(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A `dsh` on PATH that records its argv instead of running pnpm."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    marker = tmp_path / "dsh-argv"
+    script = bin_dir / "dsh"
+    script.write_text(f'#!/bin/sh\necho "$@" >> "{marker}"\n', encoding="utf-8")
+    script.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    return marker
+
+
+# --- The row mount ---
+
+
+def test_mount_creates_the_patch_with_a_valid_row(tmp_path: Path) -> None:
+    patch = tmp_path / "cordis.patch.yml"
+
+    assert mount_dsh_row(patch) is True
+
+    # The row is what DSH reads, so prove it parses and says what we intend.
+    assert yaml.safe_load(patch.read_text(encoding="utf-8")) == [
+        {"insert": [{"id": "basic-memory", "name": DSH_PACKAGE}]}
+    ]
+
+
+def test_mount_is_idempotent(tmp_path: Path) -> None:
+    patch = tmp_path / "cordis.patch.yml"
+    mount_dsh_row(patch)
+    first = patch.read_text(encoding="utf-8")
+
+    assert mount_dsh_row(patch) is False
+    assert patch.read_text(encoding="utf-8") == first
+
+
+def test_mount_preserves_what_the_user_wrote(tmp_path: Path) -> None:
+    patch = tmp_path / "cordis.patch.yml"
+    existing = "# my own MCP server\n- insert:\n    - id: mcp-calibre\n      name: '@deepseek-ai/dsh-mcp-client'\n"
+    patch.write_text(existing, encoding="utf-8")
+
+    mount_dsh_row(patch)
+
+    text = patch.read_text(encoding="utf-8")
+    assert text.startswith(existing)  # untouched, byte for byte
+    assert DSH_ROW_MARKER in text
+    entries = yaml.safe_load(text)
+    assert [entry["insert"][0]["id"] for entry in entries] == ["mcp-calibre", "basic-memory"]
+
+
+def test_mount_creates_missing_directories(tmp_path: Path) -> None:
+    patch = tmp_path / "profiles" / "web" / "cordis.patch.yml"
+
+    assert mount_dsh_row(patch) is True
+
+    assert patch.is_file()
+
+
+def test_row_block_names_the_configured_package() -> None:
+    assert "'@example/other-plugin'" in dsh_row_block("@example/other-plugin")
+
+
+# --- The command ---
+
+
+def test_profile_patch_follows_dsh_home(isolated_dsh_home: Path) -> None:
+    assert dsh_profile_patch("web") == isolated_dsh_home / "profiles" / "web" / "cordis.patch.yml"
+
+
+def test_dry_run_writes_nothing_and_shows_the_mount(isolated_dsh_home: Path) -> None:
+    result = runner.invoke(app, ["install", "dsh", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert "dsh plugin --profile web add" in result.stdout
+    assert "would mount the plugin row" in result.stdout
+    assert not dsh_profile_patch("web").exists()
+
+
+def test_install_runs_the_host_cli_and_mounts_the_row(
+    tmp_path: Path, isolated_dsh_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    argv = fake_dsh(tmp_path, monkeypatch)
+
+    result = runner.invoke(app, ["install", "dsh", "--yes"])
+
+    assert result.exit_code == 0
+    assert argv.read_text(encoding="utf-8").strip() == f"plugin --profile web add {DSH_PACKAGE}"
+    assert "mounted:" in result.stdout
+    assert dsh_profile_patch("web").is_file()
+
+
+def test_install_is_repeatable(tmp_path: Path, isolated_dsh_home: Path, monkeypatch) -> None:
+    fake_dsh(tmp_path, monkeypatch)
+    runner.invoke(app, ["install", "dsh", "--yes"])
+    first = dsh_profile_patch("web").read_text(encoding="utf-8")
+
+    result = runner.invoke(app, ["install", "dsh", "--yes"])
+
+    assert result.exit_code == 0
+    assert "already mounted:" in result.stdout
+    assert dsh_profile_patch("web").read_text(encoding="utf-8") == first
+
+
+def test_install_honours_a_named_profile(
+    tmp_path: Path, isolated_dsh_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    argv = fake_dsh(tmp_path, monkeypatch)
+
+    result = runner.invoke(app, ["install", "dsh", "--profile", "tui", "--yes"])
+
+    assert result.exit_code == 0
+    assert "--profile tui" in argv.read_text(encoding="utf-8")
+    assert dsh_profile_patch("tui").is_file()
+
+
+def test_missing_host_cli_fails_before_mounting(
+    tmp_path: Path, isolated_dsh_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # An empty PATH, not a prepended one: a real `dsh` on the developer's machine
+    # would otherwise be found and run.
+    empty = tmp_path / "empty-bin"
+    empty.mkdir()
+    monkeypatch.setenv("PATH", str(empty))
+
+    result = runner.invoke(app, ["install", "dsh", "--yes"])
+
+    assert result.exit_code == 1
+    assert not dsh_profile_patch("web").exists()

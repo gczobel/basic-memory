@@ -16,6 +16,7 @@ from typing import Literal
 import typer
 
 from basic_memory.cli.app import app
+from basic_memory.cli.commands.hook import dsh_home
 from basic_memory.utils import shell_command
 
 
@@ -115,6 +116,39 @@ class InstallScope(StrEnum):
     local = "local"
 
 
+# The DSH integration publishes to npm; DSH installs a plugin with pnpm into the
+# profile directory and mounts it with one row in that profile's patch layer.
+DSH_PACKAGE = "@basicmemory/dsh-basic-memory"
+DSH_ROW_MARKER = "# Basic Memory plugin (managed by `bm install dsh`)"
+
+
+def dsh_profile_patch(profile: str) -> Path:
+    """The user patch layer of one DSH profile."""
+    return dsh_home() / "profiles" / profile / "cordis.patch.yml"
+
+
+def dsh_row_block(package: str = DSH_PACKAGE) -> str:
+    """The patch row that mounts the plugin in a DSH profile."""
+    return f"{DSH_ROW_MARKER}\n- insert:\n    - id: basic-memory\n      name: '{package}'\n"
+
+
+def mount_dsh_row(patch_path: Path, package: str = DSH_PACKAGE) -> bool:
+    """Append the plugin row to a profile patch layer, once.
+
+    Returns True when the file changed. The marker is the ownership tag: it makes
+    the row recognisable on a later run, so reinstalling is a no-op and the row
+    stays distinguishable from anything the user wrote themselves.
+    """
+    existing = patch_path.read_text(encoding="utf-8") if patch_path.exists() else ""
+    if DSH_ROW_MARKER in existing:
+        return False
+    body = existing.rstrip("\n")
+    separator = "\n\n" if body else ""
+    patch_path.parent.mkdir(parents=True, exist_ok=True)
+    patch_path.write_text(f"{body}{separator}{dsh_row_block(package)}", encoding="utf-8")
+    return True
+
+
 @install_app.command("claude-code")
 def install_claude_code(
     source: str = typer.Option(
@@ -170,6 +204,50 @@ def install_claude_code(
         ),
     )
     delegate_install(host, dry_run=dry_run, yes=yes)
+
+
+@install_app.command("dsh")
+def install_dsh(
+    profile: str = typer.Option("web", "--profile", help="DSH profile to install the plugin into."),
+    package: str = typer.Option(DSH_PACKAGE, "--package", help="Plugin package to install."),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Preview only; no subprocesses or writes."
+    ),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Approve the displayed installation plan."),
+) -> None:
+    """Install the Basic Memory plugin into a DeepSeek Harness profile.
+
+    DSH installs a plugin with its own CLI (pnpm into the profile directory), and
+    mounts it with one row in that profile's patch layer. Both halves run here so
+    a standalone install needs no hand-edited YAML.
+    """
+    patch_path = dsh_profile_patch(profile)
+    host = HostPlugin(
+        executable="dsh",
+        display="DeepSeek Harness",
+        installer="bm install dsh",
+        summary=(
+            f"Install {package} into the DSH profile '{profile}', then mount its plugin row."
+        ),
+        steps=(("plugin", "--profile", profile, "add", package),),
+        next_steps=(
+            "Restart the harness so it loads the plugin.",
+            "Map this workspace to a Basic Memory project in .dsh/basic-memory.json "
+            "(see integrations/dsh/README.md).",
+        ),
+    )
+    # Trigger: --dry-run.
+    # Why: the plan must show the row mount, which is a write this command owns
+    # rather than a step the host CLI performs.
+    # Outcome: nothing is written and nothing is spawned.
+    if dry_run:
+        delegate_install(host, dry_run=True, yes=yes)
+        typer.echo(f"would mount the plugin row in {patch_path}")
+        return
+
+    delegate_install(host, dry_run=False, yes=yes)
+    changed = mount_dsh_row(patch_path, package)
+    typer.echo(f"{'mounted' if changed else 'already mounted'}: {patch_path}")
 
 
 @dataclass(frozen=True, slots=True)
