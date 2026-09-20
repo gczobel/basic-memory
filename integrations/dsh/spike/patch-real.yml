@@ -1,0 +1,15 @@
+# Verification overlay: mount the BUILT integration package (not the spike) and
+# route `bm` through this checkout, so the run exercises the new `dsh` harness in
+# src/basic_memory/cli/commands/hook.py rather than the released package.
+- insert:
+    - id: basic-memory
+      name: /home/gus/development/basic-memory/integrations/dsh/dist/index.js
+      config:
+        bmCommand:
+          [
+            uv,
+            run,
+            --project,
+            /home/gus/development/basic-memory,
+            basic-memory,
+          ]

@@ -1,0 +1,9 @@
+{"at":"2026-09-20T11:59:09.363Z","ms":128,"seq":0,"event":"section-registered"}
+{"at":"2026-09-20T11:59:09.364Z","ms":129,"seq":1,"event":"skill-registered"}
+{"at":"2026-09-20T11:59:11.438Z","ms":2203,"seq":2,"event":"pre-step","step":1,"turn":1,"kind":"enter","messages":4}
+{"at":"2026-09-20T11:59:11.438Z","ms":2203,"seq":3,"event":"inject","step":1,"chars":267}
+{"at":"2026-09-20T11:59:14.105Z","ms":4870,"seq":258,"event":"compaction-event","type":"compaction/start","data":{"compactionId":"5597d8fd-25e3-46fa-8770-3175680920bc","turn":1}}
+{"at":"2026-09-20T11:59:14.105Z","ms":4870,"seq":5,"event":"listener-enter","delayMs":25000,"seen":0}
+{"at":"2026-09-20T11:59:18.080Z","ms":8845,"seq":259,"event":"compaction-event","type":"compaction/end","data":{"compactionId":"5597d8fd-25e3-46fa-8770-3175680920bc","turn":1,"error":"summary is not smaller than the shadowed content (654 estimated framed tokens >= 46)"}}
+{"at":"2026-09-20T11:59:18.082Z","ms":8847,"seq":7,"event":"pre-step","step":2,"turn":1,"kind":"enter","messages":0}
+{"at":"2026-09-20T11:59:39.120Z","ms":29885,"seq":8,"event":"listener-finished"}

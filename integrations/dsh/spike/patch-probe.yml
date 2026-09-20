@@ -1,0 +1,5 @@
+# Probe overlay: mount only the read-probe plugin, with no Basic Memory
+# integration, so nothing else can influence what the trace shows.
+- insert:
+    - id: bm-probe
+      name: /home/gus/development/basic-memory/integrations/dsh/spike/probe-read.js

@@ -1,0 +1,16 @@
+# Spike overlay: mount the Basic Memory plugin into a DSH profile without
+# touching the profile's own cordis.patch.yml. Applied after the profile layer
+# via `dsh --profile <name> --patch <this file>`.
+#
+# compaction-basic is retuned so a short multi-step job provokes a real
+# compaction, which is the only way to observe the compaction/* event sequence
+# and whether an async session-event listener delays it. retainRatio must stay
+# below thresholdRatio or the plugin refuses to load.
+- id: compaction-basic
+  config:
+    thresholdRatio: 0.03
+    retainRatio: 0.01
+
+- insert:
+    - id: basic-memory
+      name: /home/gus/development/basic-memory/integrations/dsh/spike/basic-memory-spike.js
