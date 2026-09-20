@@ -57,6 +57,19 @@ target another profile. `--package` takes any specifier pnpm understands, so
 `--package /path/to/checkout/integrations/dsh` installs from a local checkout
 rather than the registry.
 
+DSH reports `declares no dsh.bundle — installed as a plain dependency`. That is
+expected and harmless: `dsh.bundle` marks a **bundle**, a profile layer such as
+`dsh-base`, while this package is a plain plugin, which the row mounts explicitly —
+the same shape as `@deepseek-ai/dsh-mcp-client`.
+
+The plugin spawns `bm` on PATH by default. If the CLI is not on PATH — a checkout
+driven through `uv`, for example — give the row a launcher:
+
+```yaml
+      config:
+        bmCommand: [uv, run, --project, /path/to/checkout, basic-memory]
+```
+
 To mount it by hand, add the row and configure it:
 
 ```yaml

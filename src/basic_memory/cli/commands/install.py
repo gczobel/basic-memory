@@ -142,7 +142,12 @@ def mount_dsh_row(patch_path: Path, package: str = DSH_PACKAGE) -> bool:
     existing = patch_path.read_text(encoding="utf-8") if patch_path.exists() else ""
     if DSH_ROW_MARKER in existing:
         return False
-    body = existing.rstrip("\n")
+    # Trigger: the profile patch is still its empty-array template.
+    # Why: `[]` is a complete YAML document, so a block sequence appended after it
+    # makes the file unparseable and the whole profile fails to boot.
+    # Outcome: drop the placeholder, keep the comments, then append the row.
+    kept = [line for line in existing.splitlines() if line.strip() != "[]"]
+    body = "\n".join(kept).rstrip("\n")
     separator = "\n\n" if body else ""
     patch_path.parent.mkdir(parents=True, exist_ok=True)
     patch_path.write_text(f"{body}{separator}{dsh_row_block(package)}", encoding="utf-8")

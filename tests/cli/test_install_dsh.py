@@ -85,6 +85,26 @@ def test_mount_creates_missing_directories(tmp_path: Path) -> None:
     assert patch.is_file()
 
 
+def test_mount_replaces_the_empty_patch_placeholder(tmp_path: Path) -> None:
+    """An untouched profile patch is the empty-array template, and `[]` is a
+    complete YAML document: a block sequence appended after it makes the file
+    unparseable, so the profile fails to boot. DSH's own template goes in here."""
+    patch = tmp_path / "cordis.patch.yml"
+    patch.write_text(
+        "# Your patch layer for this dsh profile, applied after every bundle layer:\n"
+        "# a top-level YAML array of loader patch entries (id-targeted config\n"
+        "# overrides, disables, and insert lists; `!!js` expressions allowed).\n"
+        "[]\n",
+        encoding="utf-8",
+    )
+
+    assert mount_dsh_row(patch) is True
+
+    text = patch.read_text(encoding="utf-8")
+    assert text.startswith("# Your patch layer")  # the guidance survives
+    assert yaml.safe_load(text) == [{"insert": [{"id": "basic-memory", "name": DSH_PACKAGE}]}]
+
+
 def test_row_block_names_the_configured_package() -> None:
     assert "'@example/other-plugin'" in dsh_row_block("@example/other-plugin")
 
