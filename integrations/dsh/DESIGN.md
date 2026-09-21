@@ -202,6 +202,26 @@ what matters.
 
 ## 8. Known limitations
 
+**The brief and the capture cannot reach a remote graph.** This integration assumes
+the hook-side CLI resolves the *same* graph as the MCP server the model uses. That
+holds when the CLI and the MCP server are one installation. It breaks when the MCP
+server is remote and the host machine's CLI is a separate installation with its own
+config: `bm hook` then reads a local project, and its notes are not the model's
+notes.
+
+The failure is silent and looks like an empty graph, so the symptom is a missing
+brief rather than an error. No client-side configuration closes it: the only path
+from the hook to a remote instance would be a remote API, and a self-hosted server
+that speaks MCP alone does not expose one — Basic Memory's own remote path is Basic
+Memory Cloud, not an arbitrary instance.
+
+The same shape applies to the Claude Code plugin, where it is masked: that host
+delivers the MCP server's `instructions` field to the model, so orientation happens
+through the tools and the empty brief goes unnoticed. DSH drops `instructions`
+(§2 Q9), which is what makes the gap visible here. Closing it is a design change
+rather than a harness one: the hook side either needs an endpoint to talk to, or the
+plugin has to speak MCP itself, as `integrations/pi` already can.
+
 **No backfill on resume.** A plugin sees only events after it loads, so a resumed
 session's note starts partway through its history. `session.log` would fix it;
 §4.5 explains why that is not used.
