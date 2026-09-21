@@ -74,9 +74,13 @@ The monorepo ships several host-native packages alongside the Python core. Use t
 - `just package-check-skills` — validates every top-level `skills/memory-*/SKILL.md` frontmatter block.
 - `just package-check-hermes` — validates `integrations/hermes/plugin.yaml`, the Hermes provider entrypoint, bundled skill, and runs the hermetic unit suite.
 - `just package-check-openclaw` — runs the OpenClaw package install, copies top-level skills into the generated bundle, typechecks, lints, builds `dist/`, runs Bun tests, and performs `npm pack --dry-run`.
+- `just package-check-codex` — validates the Codex plugin manifest, bundled skills, hooks, MCP config, and schemas.
+- `just package-check-tau` — validates the Tau extension over a real MCP transport, runtime loading, and lifecycle checks.
+- `just package-check-pi` — runs the Pi package install, copies skills, typechecks, tests, and performs `npm pack --dry-run`.
+- `just package-check-dsh` — runs the DSH integration install, typechecks, tests, builds `dist/`, and performs `npm pack --dry-run`.
 - `just agent-harness-check` — checks the host-specific harnesses without the shared markdown-only skills target.
 
-Package-local justfiles live in `plugins/claude-code/`, `skills/`, `integrations/hermes/`, and `integrations/openclaw/`. Prefer the root targets for PR verification so command names stay stable as package internals evolve.
+Package-local justfiles live in `plugins/claude-code/`, `plugins/codex/`, `skills/`, and `integrations/{hermes,openclaw,tau,pi,dsh}/`. Prefer the root targets for PR verification so command names stay stable as package internals evolve.
 
 ### PR CI Gate
 

@@ -8,13 +8,14 @@ recorded fixtures — nothing else changes.
 
 from __future__ import annotations
 
-from basic_memory.hooks.adapters import claude, codex, pi
+from basic_memory.hooks.adapters import claude, codex, dsh, pi
 from basic_memory.hooks.adapters.base import HarnessAdapter, HookPayload, NormalizedHookEvent
 
 _ADAPTERS: dict[str, HarnessAdapter] = {
     "claude": claude.ADAPTER,
     "codex": codex.ADAPTER,
     "pi": pi.ADAPTER,
+    "dsh": dsh.ADAPTER,
 }
 
 
