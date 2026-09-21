@@ -57,6 +57,11 @@ target another profile. `--package` takes any specifier pnpm understands, so
 `--package /path/to/checkout/integrations/dsh` installs from a local checkout
 rather than the registry.
 
+The row always names a **package**, never a directory. DSH imports the row's
+`name`, so a local checkout is mounted by the name its `package.json` declares —
+writing the path instead fails the whole profile at boot with
+`ERR_UNSUPPORTED_DIR_IMPORT`.
+
 DSH reports `declares no dsh.bundle — installed as a plain dependency`. That is
 expected and harmless: `dsh.bundle` marks a **bundle**, a profile layer such as
 `dsh-base`, while this package is a plain plugin, which the row mounts explicitly —

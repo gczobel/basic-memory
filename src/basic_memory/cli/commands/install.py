@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -127,9 +128,30 @@ def dsh_profile_patch(profile: str) -> Path:
     return dsh_home() / "profiles" / profile / "cordis.patch.yml"
 
 
-def dsh_row_block(package: str = DSH_PACKAGE) -> str:
+def dsh_row_block(name: str = DSH_PACKAGE) -> str:
     """The patch row that mounts the plugin in a DSH profile."""
-    return f"{DSH_ROW_MARKER}\n- insert:\n    - id: basic-memory\n      name: '{package}'\n"
+    return f"{DSH_ROW_MARKER}\n- insert:\n    - id: basic-memory\n      name: '{name}'\n"
+
+
+def dsh_row_name(package: str) -> str:
+    """The module specifier the plugin row must carry.
+
+    The loader *imports* the row's `name`, so a local directory install has to be
+    mounted by the package name pnpm installed it under. Writing the directory
+    path instead fails the whole profile at boot with ERR_UNSUPPORTED_DIR_IMPORT.
+    """
+    candidate = Path(package)
+    if not candidate.is_dir():
+        return package
+    manifest = candidate / "package.json"
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        raise InstallError(f"{candidate} has no readable package.json to mount") from None
+    name = data.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise InstallError(f"{manifest} declares no package name")
+    return name.strip()
 
 
 def mount_dsh_row(patch_path: Path, package: str = DSH_PACKAGE) -> bool:
@@ -251,7 +273,9 @@ def install_dsh(
         return
 
     delegate_install(host, dry_run=False, yes=yes)
-    changed = mount_dsh_row(patch_path, package)
+    # The row names a module; the install step names a package. They differ when
+    # the package is a local directory, which pnpm installs under its own name.
+    changed = mount_dsh_row(patch_path, dsh_row_name(package))
     typer.echo(f"{'mounted' if changed else 'already mounted'}: {patch_path}")
 
 

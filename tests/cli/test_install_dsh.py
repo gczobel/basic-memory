@@ -1,5 +1,6 @@
 """DSH installer coverage: the row mount and the `bm install dsh` plan."""
 
+import json
 import os
 from pathlib import Path
 
@@ -10,8 +11,10 @@ from typer.testing import CliRunner
 from basic_memory.cli.commands.install import (
     DSH_PACKAGE,
     DSH_ROW_MARKER,
+    InstallError,
     dsh_profile_patch,
     dsh_row_block,
+    dsh_row_name,
     mount_dsh_row,
 )
 from basic_memory.cli.main import app
@@ -107,6 +110,49 @@ def test_mount_replaces_the_empty_patch_placeholder(tmp_path: Path) -> None:
 
 def test_row_block_names_the_configured_package() -> None:
     assert "'@example/other-plugin'" in dsh_row_block("@example/other-plugin")
+
+
+def test_row_name_uses_the_package_name_for_a_directory(tmp_path: Path) -> None:
+    """The loader imports the row's `name`, so a directory install must be mounted
+    by the package name. A directory path fails the whole profile at boot with
+    ERR_UNSUPPORTED_DIR_IMPORT."""
+    plugin = tmp_path / "plugin"
+    plugin.mkdir()
+    (plugin / "package.json").write_text(
+        json.dumps({"name": "@example/dir-plugin", "main": "./dist/index.js"}), encoding="utf-8"
+    )
+
+    assert dsh_row_name(str(plugin)) == "@example/dir-plugin"
+
+
+def test_row_name_passes_a_package_specifier_through() -> None:
+    assert dsh_row_name("@example/registry-plugin") == "@example/registry-plugin"
+
+
+def test_row_name_rejects_a_directory_without_a_manifest(tmp_path: Path) -> None:
+    plugin = tmp_path / "plugin"
+    plugin.mkdir()
+
+    with pytest.raises(InstallError, match="no readable package.json"):
+        dsh_row_name(str(plugin))
+
+
+def test_install_mounts_the_package_name_not_the_path(
+    tmp_path: Path, isolated_dsh_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A local install must still produce a row the loader can import."""
+    fake_dsh(tmp_path, monkeypatch)
+    plugin = tmp_path / "plugin"
+    plugin.mkdir()
+    (plugin / "package.json").write_text(
+        json.dumps({"name": "@example/dir-plugin", "main": "./dist/index.js"}), encoding="utf-8"
+    )
+
+    result = runner.invoke(app, ["install", "dsh", "--package", str(plugin), "--yes"])
+
+    assert result.exit_code == 0
+    patch = dsh_profile_patch("web").read_text(encoding="utf-8")
+    assert yaml.safe_load(patch) == [{"insert": [{"id": "basic-memory", "name": "@example/dir-plugin"}]}]
 
 
 # --- The command ---
