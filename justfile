@@ -609,14 +609,14 @@ check: lint format typecheck
 # Run all code quality checks and all test suites, including semantic benchmarks
 check-all: lint format typecheck test test-semantic
 
-# Validate every consolidated agent package (Claude Code, Codex, skills, Hermes, OpenClaw, Tau, Pi)
-package-check: package-check-claude-code package-check-codex package-check-skills package-check-hermes package-check-openclaw package-check-tau package-check-pi
+# Validate every consolidated agent package (Claude Code, Codex, skills, Hermes, OpenClaw, Tau, Pi, DSH)
+package-check: package-check-claude-code package-check-codex package-check-skills package-check-hermes package-check-openclaw package-check-tau package-check-pi package-check-dsh
 
 # Alias for plugin/package validation during consolidation work
 plugins-check: package-check
 
 # Validate the host-native agent harnesses
-agent-harness-check: package-check-claude-code package-check-hermes package-check-openclaw package-check-tau package-check-pi
+agent-harness-check: package-check-claude-code package-check-hermes package-check-openclaw package-check-tau package-check-pi package-check-dsh
 
 # Claude Code plugin: manifests, bundled skills, bundled agent, and strict plugin validation
 package-check-claude-code:
@@ -646,6 +646,10 @@ package-check-tau:
 # Pi package: install deps, copy skills, typecheck, test, and npm pack dry-run
 package-check-pi:
     just --justfile integrations/pi/justfile --working-directory integrations/pi check
+
+# DSH integration: install deps, typecheck, test, build, and npm pack dry-run
+package-check-dsh:
+    just --justfile integrations/dsh/justfile --working-directory integrations/dsh check
 
 # Generate Alembic migration with descriptive message
 migration message:
@@ -750,7 +754,9 @@ release version:
         integrations/hermes/__init__.py \
         integrations/openclaw/package.json \
         integrations/pi/package.json \
-        integrations/pi/package-lock.json
+        integrations/pi/package-lock.json \
+        integrations/dsh/package.json \
+        integrations/dsh/package-lock.json
     git commit -s -m "$COMMIT_SUBJECT"
 
     echo "📤 Opening release PR..."
@@ -887,7 +893,9 @@ beta version:
         integrations/hermes/__init__.py \
         integrations/openclaw/package.json \
         integrations/pi/package.json \
-        integrations/pi/package-lock.json
+        integrations/pi/package-lock.json \
+        integrations/dsh/package.json \
+        integrations/dsh/package-lock.json
     git commit -s -m "$COMMIT_SUBJECT"
 
     echo "📤 Opening release PR..."

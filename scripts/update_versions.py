@@ -192,6 +192,20 @@ def _update_packages(version: str, *, dry_run: bool) -> None:
         lambda data: set_npm_lock_version(data, pi_version),
         dry_run=dry_run,
     )
+    # The DSH integration ships as an npm package that the installer fetches by
+    # name, so only its two manifests carry a version — nothing is bundled into
+    # the wheel the way the Pi package is.
+    dsh_version = npm_package_version(version)
+    update_json(
+        "integrations/dsh/package.json",
+        lambda data: set_package_version(data, dsh_version),
+        dry_run=dry_run,
+    )
+    update_json(
+        "integrations/dsh/package-lock.json",
+        lambda data: set_npm_lock_version(data, dsh_version),
+        dry_run=dry_run,
+    )
 
 
 def update_versions(raw_version: str, *, scope: str = "all", dry_run: bool) -> None:

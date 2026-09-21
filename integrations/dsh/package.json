@@ -1,0 +1,56 @@
+{
+  "name": "@basicmemory/dsh-basic-memory",
+  "version": "0.23.2",
+  "type": "module",
+  "description": "Basic Memory for DeepSeek Harness \u2014 session orientation, post-compaction checkpoints, and a bundled checkpoint skill, over the host's MCP server",
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/basicmachines-co/basic-memory.git",
+    "directory": "integrations/dsh"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "cordis-plugin",
+    "basic-memory",
+    "memory",
+    "mcp"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/",
+    "skills/",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check-types": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "pack:dry-run": "npm pack --dry-run",
+    "prepack": "npm run fetch-skills && npm run build",
+    "release:check": "npm run fetch-skills && npm run check-types && npm test && npm pack --dry-run",
+    "fetch-skills": "tsx scripts/fetch-skills.ts",
+    "pretest": "npm run fetch-skills"
+  }
+}

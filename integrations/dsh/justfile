@@ -1,0 +1,24 @@
+# Basic Memory DSH integration package
+
+install:
+    npm ci --ignore-scripts
+
+fetch-skills:
+    npm run fetch-skills
+
+check-types:
+    npm run check-types
+
+build:
+    npm run build
+
+test:
+    npm test
+
+pack:
+    npm run pack:dry-run
+
+release-check:
+    npm run release:check
+
+check: install fetch-skills check-types test build pack

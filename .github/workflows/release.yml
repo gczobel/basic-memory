@@ -105,6 +105,41 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+  dsh:
+    name: Publish DSH npm Package
+    needs: release
+    # Same gate as OpenClaw: npm publishes only for stable product tags. A
+    # pre-release Python tag is not valid npm pre-release semver.
+    if: ${{ !contains(github.ref_name, 'dev') && !contains(github.ref_name, 'b') && !contains(github.ref_name, 'rc') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: integrations/dsh
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: extractions/setup-just@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Release readiness
+        run: just release-check
+
+      - name: Publish to npm
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
   homebrew:
     name: Update Homebrew Formula
     needs: release
