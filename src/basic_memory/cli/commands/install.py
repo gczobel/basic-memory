@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -170,6 +171,148 @@ def install_claude_code(
         ),
     )
     delegate_install(host, dry_run=dry_run, yes=yes)
+
+
+# The DSH integration publishes to npm; DSH installs a plugin with pnpm into the
+# profile directory and mounts it with one row in that profile's patch layer.
+DSH_PACKAGE = "@basicmemory/dsh-basic-memory"
+DSH_ROW_MARKER = "# Basic Memory plugin (managed by `bm install dsh`)"
+
+
+def dsh_home() -> Path:
+    """DSH configuration root: ``$DSH_HOME`` when set, else ``~/.dsh``.
+
+    Mirrors ``@deepseek-ai/dsh-home-paths``, which treats the variable as a
+    literal full replacement for the default root and falls back only when unset.
+    """
+    override = os.environ.get("DSH_HOME")
+    return Path(override) if override is not None else Path.home() / ".dsh"
+
+
+def dsh_profile_patch(profile: str) -> Path:
+    """The user patch layer of one DSH profile."""
+    return dsh_home() / "profiles" / profile / "cordis.patch.yml"
+
+
+def dsh_row_block(name: str = DSH_PACKAGE) -> str:
+    """The patch row that mounts the plugin in a DSH profile."""
+    return f"{DSH_ROW_MARKER}\n- insert:\n    - id: basic-memory\n      name: '{name}'\n"
+
+
+def dsh_row_name(package: str) -> str:
+    """The module specifier the plugin row must carry.
+
+    The loader *imports* the row's `name`, so a local directory install has to be
+    mounted by the package name pnpm installed it under. Writing the directory
+    path instead fails the whole profile at boot with ERR_UNSUPPORTED_DIR_IMPORT.
+    """
+    candidate = Path(package)
+    if not candidate.is_dir():
+        return package
+    manifest = candidate / "package.json"
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        raise InstallError(f"{candidate} has no readable package.json to mount") from None
+    name = data.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise InstallError(f"{manifest} declares no package name")
+    return name.strip()
+
+
+def mount_dsh_row(patch_path: Path, package: str = DSH_PACKAGE) -> bool:
+    """Append the plugin row to a profile patch layer, once.
+
+    Returns True when the file changed. The marker is the ownership tag: it makes
+    the row recognisable on a later run, so reinstalling is a no-op and the row
+    stays distinguishable from anything the user wrote themselves.
+    """
+    existing = patch_path.read_text(encoding="utf-8") if patch_path.exists() else ""
+    if DSH_ROW_MARKER in existing:
+        return False
+    # Trigger: the profile patch is still its empty-array template.
+    # Why: `[]` is a complete YAML document, so a block sequence appended after it
+    # makes the file unparseable and the whole profile fails to boot.
+    # Outcome: drop the placeholder, keep the comments, then append the row.
+    kept = [line for line in existing.splitlines() if line.strip() != "[]"]
+    body = "\n".join(kept).rstrip("\n")
+    separator = "\n\n" if body else ""
+    patch_path.parent.mkdir(parents=True, exist_ok=True)
+    patch_path.write_text(f"{body}{separator}{dsh_row_block(package)}", encoding="utf-8")
+    return True
+
+
+@install_app.command("dsh")
+def install_dsh(
+    profile: str = typer.Option("web", "--profile", help="DSH profile to install the plugin into."),
+    package: str = typer.Option(DSH_PACKAGE, "--package", help="Plugin package to install."),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Preview only; no subprocesses or writes."
+    ),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Approve the displayed installation plan."),
+) -> None:
+    """Install the Basic Memory plugin into a DeepSeek Harness profile.
+
+    DSH installs a plugin with its own CLI (pnpm into the profile directory), and
+    mounts it with one row in that profile's patch layer. Both halves run here so
+    a standalone install needs no hand-edited YAML.
+
+    Wiring the MCP server is deliberately not part of this: the plugin contributes
+    orientation and a checkpoint request, and the model reads and writes notes
+    through the host's own MCP row, wherever that server runs.
+    """
+    patch_path = dsh_profile_patch(profile)
+    # Trigger: --package names a local directory.
+    # Why: the row must carry the package's *name*, not the path, so the manifest
+    # has to be read. That read is the last step which can fail on nothing but the
+    # user's own input, and doing it after the host CLI ran would leave the package
+    # installed with no row to load it.
+    # Outcome: a bad manifest reports one line, and nothing is installed.
+    try:
+        row_name = dsh_row_name(package)
+    except (OSError, ValueError) as exc:
+        # Paths and arguments may contain private values.
+        message = (
+            str(exc)
+            if isinstance(exc, InstallError)
+            else "Cannot read the plugin package. Check the path and its permissions."
+        )
+        typer.echo(message, err=True)
+        raise typer.Exit(1) from None
+
+    host = HostPlugin(
+        executable="dsh",
+        display="DeepSeek Harness",
+        installer="bm install dsh",
+        summary=(f"Install {package} into the DSH profile '{profile}', then mount its plugin row."),
+        steps=(("plugin", "--profile", profile, "add", package),),
+        next_steps=(
+            "Restart the harness so it loads the plugin.",
+            "Register a Basic Memory MCP server in the profile so the model has "
+            "the mcp__basic-memory__ tools (see integrations/dsh/README.md).",
+        ),
+    )
+    # Trigger: --dry-run.
+    # Why: the plan must show the row mount, which is a write this command owns
+    # rather than a step the host CLI performs.
+    # Outcome: nothing is written and nothing is spawned.
+    if dry_run:
+        delegate_install(host, dry_run=True, yes=yes)
+        typer.echo(f"would mount the plugin row for {row_name} in {patch_path}")
+        return
+
+    delegate_install(host, dry_run=False, yes=yes)
+    try:
+        changed = mount_dsh_row(patch_path, row_name)
+    except (OSError, ValueError) as exc:
+        message = (
+            str(exc)
+            if isinstance(exc, InstallError)
+            else "Installed the plugin, but could not mount its row. Check permissions on the profile directory."
+        )
+        typer.echo(message, err=True)
+        raise typer.Exit(1) from None
+    typer.echo(f"{'mounted' if changed else 'already mounted'}: {patch_path}")
 
 
 @dataclass(frozen=True, slots=True)

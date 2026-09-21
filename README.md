@@ -194,7 +194,8 @@ lock-in either way — flip between them when your needs change.
 
 This repository is also the canonical home for Basic Memory's host-native
 agent packages. The core Python package, Claude Code plugin, shared skills,
-Hermes plugin, and OpenClaw plugin all ship from the same source tree.
+Hermes plugin, OpenClaw plugin, and DeepSeek Harness plugin all ship from the
+same source tree.
 
 Maintainers can verify the whole consolidated surface from the repo root:
 
@@ -263,6 +264,20 @@ OpenClaw stays package-native and publishes from
 ```bash
 openclaw plugins install @basicmemory/openclaw-basic-memory
 ```
+
+### DeepSeek Harness
+
+The DSH plugin is a cordis plugin under [`integrations/dsh`](integrations/dsh), installed
+through the Basic Memory CLI:
+
+```bash
+bm install dsh
+```
+
+That registers the package and mounts its row in the DSH profile. Unlike the hook-based
+integrations it never runs the `bm` CLI: it reaches the graph through the harness's own MCP
+connection, so a server on another machine works exactly like a local one. See the
+[package README](integrations/dsh/README.md) for the MCP row and the three configuration keys.
 
 ## Pick up where you left off
 
